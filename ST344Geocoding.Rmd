@@ -1,0 +1,78 @@
+---
+title: "Reverse Geocoding"
+date: "11/03/2021"
+output: pdf_document
+---
+
+This code is intended for use in conjunction with code in ST344ReportCode.Rmd
+
+It will not run by itself. It is not final and may not work as a result.
+
+Solution for getting data from API in smaller parts is not particularly elegant as of yet.
+
+This method uses OpenCage, a Geocoding API https://opencagedata.com
+
+You will need to acquire an API key by signing up. A free trial gives 2,500 API requests a day at a maximum rate of 1 request per second. To do this more quickly you could purchase a one time pricing plan which will give 50,000 requests one off, only 32,066 are needed providing everything runs smoothly. This pricing plan costs £80
+
+The commented line shows how you would set your API key.
+
+Since the co-ordinates used in the stop and search records are anonymised, the metropolitan police seem to have a set number of co-ordinates to choose from, most likely the one closest to where the stop and search occurred. This means the co-ordinates in the stopSearch data set are not unique. As such you can go from needing reverse geocoding for about 605,000 pairs of co-ordinates to only around 32,000 by only getting Borough data for the unique ones and then left joining back to the data frame with all of the different stop and search records.
+
+The goals of this could be several, one of which might be looking into differences in how often the Metropolitan Police use Stop and Search in different Boroughs.
+
+
+Unfortunately, due to the cost and time restraints, this was not considered fully in the report. However I may still experiment with it and update this file.
+
+
+```{r geocoding, eval = FALSE}
+library(opencage)
+
+#oc_config(key = "YOUR_API_KEY")
+
+metStopSearch <- filter(stopSearch, Force == "metropolitan")
+metStopSearch <- filter(metStopSearch, !is.na(Latitude))
+metStopSearch <- filter(metStopSearch, !is.na(Longitude))
+
+uniqCoords <- unique(metStopSearch[,c(4, 5)])
+
+partition1 <- uniqCoords[1:2000, c(1, 2)]
+partition2 <- uniqCoords[2001:4000, c(1, 2)]
+partition3 <- uniqCoords[4001:6000, c(1, 2)]
+partition4 <- uniqCoords[6001:8000, c(1, 2)]
+partition5 <- uniqCoords[8001:10000, c(1, 2)]
+partition6 <- uniqCoords[10001:12000, c(1, 2)]
+partition7 <- uniqCoords[12001:14000, c(1, 2)]
+partition8 <- uniqCoords[14001:16000, c(1, 2)]
+partition9 <- uniqCoords[16001:18000, c(1, 2)]
+partition10 <- uniqCoords[18001:20000, c(1, 2)]
+partition11 <- uniqCoords[20001:22000, c(1, 2)]
+partition12 <- uniqCoords[22001:24000, c(1, 2)]
+partition13 <- uniqCoords[24001:26000, c(1, 2)]
+partition14 <- uniqCoords[26001:28000, c(1, 2)]
+partition15 <- uniqCoords[28001:30000, c(1, 2)]
+partition16 <- uniqCoords[30001:32066, c(1, 2)]
+
+locations1 <- oc_reverse_df(latitude = partition1$Latitude, longitude = partition1$Longitude)
+locations2 <- oc_reverse_df(latitude = partition2$Latitude, longitude = partition2$Longitude)
+locations3 <- oc_reverse_df(latitude = partition3$Latitude, longitude = partition3$Longitude)
+locations4 <- oc_reverse_df(latitude = partition4$Latitude, longitude = partition4$Longitude)
+locations5 <- oc_reverse_df(latitude = partition5$Latitude, longitude = partition5$Longitude)
+locations6 <- oc_reverse_df(latitude = partition6$Latitude, longitude = partition6$Longitude)
+locations7 <- oc_reverse_df(latitude = partition7$Latitude, longitude = partition7$Longitude)
+locations8 <- oc_reverse_df(latitude = partition8$Latitude, longitude = partition8$Longitude)
+locations9 <- oc_reverse_df(latitude = partition9$Latitude, longitude = partition9$Longitude)
+locations10 <- oc_reverse_df(latitude = partition10$Latitude, longitude = partition10$Longitude)
+locations11 <- oc_reverse_df(latitude = partition11$Latitude, longitude = partition11$Longitude)
+locations12 <- oc_reverse_df(latitude = partition12$Latitude, longitude = partition12$Longitude)
+locations13 <- oc_reverse_df(latitude = partition13$Latitude, longitude = partition13$Longitude)
+locations14 <- oc_reverse_df(latitude = partition14$Latitude, longitude = partition14$Longitude)
+locations15 <- oc_reverse_df(latitude = partition15$Latitude, longitude = partition15$Longitude)
+locations16 <- oc_reverse_df(latitude = partition16$Latitude, longitude = partition16$Longitude)
+
+boroughs <- c(locations1$oc_city_district, locations2$oc_city_district, locations3$oc_city_district, locations4$oc_city_district, locations5$oc_city_district, locations6$oc_city_district, locations7$oc_city_district, locations8$oc_city_district, locations9$oc_city_district, locations10$oc_city_district, locations11$oc_city_district, locations12$oc_city_district, locations13$oc_city_district, locations14$oc_city_district, locations15$oc_city_district, locations16$oc_city_district)
+
+uniqCoords$borough <- boroughs
+left_join(uniqCoords, metStopSearch, by = c("Latitude", "Longitude"))
+
+boroughSummary <- metStopSearch %>% group_by(borough)
+``` 
