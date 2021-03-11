@@ -1,0 +1,215 @@
+---
+title: "Examining Ethnic Bias in use of Stop and Search in the UK"
+output: pdf_document
+geometry: margin = 2cm
+---
+
+```{r libraries}
+library(dplyr)
+library(rio)
+library(magrittr)
+library(lubridate)
+library(ggplot2)
+load("~/Downloads/stopSearch_assignment.rda")
+```
+
+
+```{r dataCleaning}
+names(stopSearch)[c(4,5,9,10,11,13,15,16)] <- c('PartOfPolicingOperation',
+                                             'PolicingOperation',
+                                             'AgeRange',
+                                             'SelfDefinedEthnicity',
+                                             'OfficerDefinedEthnicity',
+                                             'ObjectOfSearch',
+                                             'OutcomeLinkedToObjectOfSearch',
+                                             'RemovalOfMoreThanJustOuterClothing')
+stopSearch <- stopSearch %>% filter(Force %in% c('city-of-london', 'dyfed-powys', 'metropolitan'))
+stopSearch <- stopSearch %>% mutate(Legislation = factor(Legislation),
+                                    Outcome = factor(Outcome),
+                                    Type = factor(Type),
+                                    dateDay = date(Date),
+                                    ObjectOfSearch = factor(ObjectOfSearch),
+                                    SelfDefinedEthnicity = factor(SelfDefinedEthnicity),
+                                    OfficerDefinedEthnicity = factor(OfficerDefinedEthnicity),
+                                    PartOfPolicingOperation = factor(PartOfPolicingOperation),
+                                    Force = factor(Force))
+
+stopSearch <- stopSearch %>% mutate(SelfDefinedEthnicitySimple = 
+                                                if_else(SelfDefinedEthnicity %in% 
+                                                          c("Asian/Asian British - Bangladeshi", "Asian/Asian British - Indian",
+                                                            "Asian/Asian British - Any other Asian background", "Asian/Asian British - Pakistani", "Mixed/Multiple ethnic groups - White and Asian"), 
+                                                             true = "Asian", false = 
+                                                if_else(SelfDefinedEthnicity %in% 
+                                                          c("Black/African/Caribbean/Black British - African", "Black/African/Caribbean/Black British - Caribbean",
+                                                            "Black/African/Caribbean/Black British - Any other Black/African/Caribbean background", 
+                                                            "Mixed/Multiple ethnic groups - White and Black Caribbean", "Mixed/Multiple ethnic groups - White and Black African"), 
+                                                            true = "Black", false = 
+                                                if_else(stopSearch$SelfDefinedEthnicity %in% 
+                                                          c("White - English/Welsh/Scottish/Northern Irish/British", "White - Any other White background", "White - Irish"), 
+                                                           true = "White", false = 
+                                                if_else(SelfDefinedEthnicity %in% 
+                                                          c("Other ethnic group - Not stated", "Other ethnic group - Any other ethnic group", "Asian/Asian British - Chinese",
+                                                            "Mixed/Multiple ethnic groups - Any other Mixed/Multiple ethnic background"), 
+                                                           true = "Other", false = "")))))
+stopSearch$SelfDefinedEthnicitySimple <- as.factor(stopSearch$SelfDefinedEthnicitySimple)
+
+stopSearch <- stopSearch[-c(4, 5, 8)]
+stopSearch <- filter(stopSearch, OfficerDefinedEthnicity != "Mixed")
+```
+
+
+```{r regionSummaryData}
+metSummary <- filter(stopSearch, Force == "metropolitan") %>% group_by(SelfDefinedEthnicitySimple, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+citySummary <- filter(stopSearch, Force == "city-of-london") %>% group_by(SelfDefinedEthnicitySimple, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+dyfedSummary <- filter(stopSearch, Force == "dyfed-powys") %>% group_by(SelfDefinedEthnicitySimple, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+
+metSummary2 <- filter(stopSearch, Force == "metropolitan") %>% group_by(OfficerDefinedEthnicity, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+citySummary2 <- filter(stopSearch, Force == "city-of-london") %>% group_by(OfficerDefinedEthnicity, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+dyfedSummary2 <- filter(stopSearch, Force == "dyfed-powys") %>% group_by(OfficerDefinedEthnicity, year = floor_date(dateDay, "year")) %>%
+  summarise(number = n())
+```
+
+```{r metropolitanDispRatio}
+metSummary$Population <- rep(c(0, 1629000, 1050000, 940000, 5247000), each = 4)
+metSummary <- filter(metSummary, SelfDefinedEthnicitySimple %in% c("Asian", "Black", "White"))
+metSummary <- metSummary %>% mutate(RatePerThousand = (number/Population)*1000)
+metSummary2$Population <- rep(c(0, 1629000, 1050000, 940000, 5247000), each = 4)
+metSummary2 <- filter(metSummary2, OfficerDefinedEthnicity %in% c("Asian", "Black", "White"))
+metSummary2 <- metSummary2 %>% mutate(RatePerThousand = (number/Population)*1000)
+
+metSummary$whiteSearches <- rep(c(10932, 45572, 83153, 76531), times = 3)
+metSummary <- metSummary %>% mutate(searchProportion = number/whiteSearches)
+metSummary$popRatio <- rep(c(3.220994, 4.997143, 1), each = 4)
+metSummary <- metSummary %>% mutate(dispProp = searchProportion * popRatio)
+
+metSummary2$whiteSearches <- rep(c(12268, 52605, 99608, 93298), times = 3)
+metSummary2 <- metSummary2 %>% mutate(searchProportion = number/whiteSearches)
+metSummary2$popRatio <- rep(c(3.220994, 4.997143, 1), each = 4)
+metSummary2 <- metSummary2 %>% mutate(dispProp = searchProportion * popRatio)
+```
+
+
+```{r}
+citySummary <- citySummary %>% filter(SelfDefinedEthnicitySimple %in% c("Asian", "Black", "White"))
+citySummary$whiteSearches <- rep(c(117, 522, 865, 746), times = 3)
+citySummary <- citySummary %>% mutate(searchProportion = number/whiteSearches)
+citySummary$popRatio <- rep(c(3.220994, 4.997143, 1), each = 4)
+citySummary <- citySummary %>% mutate(dispProp = searchProportion * popRatio)
+
+citySummary2 <- citySummary2 %>% filter(OfficerDefinedEthnicity %in% c("Asian", "Black", "White"))
+citySummary2$whiteSearches <- rep(c(134, 669, 1270, 1089), times = 3)
+citySummary2 <- citySummary2 %>% mutate(searchProportion = number/whiteSearches)
+citySummary2$popRatio <- rep(c(3.220994, 4.997143, 1), each = 4)
+citySummary2 <- citySummary2 %>% mutate(dispProp = searchProportion * popRatio)
+```
+
+
+```{r dyfedDispRatio}
+dyfedSummary <- dyfedSummary %>% filter(SelfDefinedEthnicitySimple %in% c("Asian", "Black", "White"))
+dyfedSummary2 <- dyfedSummary2 %>% filter(OfficerDefinedEthnicity  %in% c("Asian", "Black", "White"))
+dyfedSummary$Population = rep(c(5203, 5202, 504709), each = 4)
+dyfedSummary2$Population = rep(c(5203, 5202, 504709), each = 4)
+dyfedSummary <- dyfedSummary %>% mutate(RatePerThousand = (number/Population)*1000)
+dyfedSummary2 <- dyfedSummary2 %>% mutate(RatePerThousand = (number/Population)*1000)
+
+dyfedSummary$whiteSearches <- rep(c(431, 2316, 2393, 2382), times = 3)
+dyfedSummary <- dyfedSummary %>% mutate(searchProportion = number/whiteSearches)
+dyfedSummary$popRatio <- rep(c(97.01278, 97.01278, 1), each = 4)
+dyfedSummary <- dyfedSummary %>% mutate(dispProp = searchProportion * popRatio)
+
+dyfedSummary2$whiteSearches <- rep(c(448, 2449, 2579, 2548), times = 3)
+dyfedSummary2 <- dyfedSummary2 %>% mutate(searchProportion = number/whiteSearches)
+dyfedSummary2$popRatio <- rep(c(97.01278, 97.01278, 1), each = 4)
+dyfedSummary2 <- dyfedSummary2 %>% mutate(dispProp = searchProportion * popRatio)
+
+```
+
+
+```{r metExcessSearch}
+metSummary$whiteRate <- rep(pull(metSummary[9:12, "RatePerThousand"]), times = 3)
+metSummary2$whiteRate <- rep(pull(metSummary2[9:12, "RatePerThousand"]), times = 3)
+metSummary <- metSummary %>% mutate(ExcessStops = round(number - (Population*(whiteRate/1000))))
+metSummary2 <- metSummary2 %>% mutate(ExcessStops = round(number - (Population*(whiteRate/1000))))
+```
+
+
+
+```{r dyfedExcessSearch}
+dyfedSummary$whiteRate <- rep(pull(dyfedSummary[9:12, "RatePerThousand"]), times = 3)
+dyfedSummary2$whiteRate <- rep(pull(dyfedSummary2[9:12, "RatePerThousand"]), times = 3)
+dyfedSummary <- dyfedSummary %>% mutate(ExcessStops = round(number - (Population*(whiteRate/1000))))
+dyfedSummary2 <- dyfedSummary2 %>% mutate(ExcessStops = round(number - (Population*(whiteRate/1000))))
+```
+
+
+```{r}
+stopSearch <- stopSearch %>% mutate(OutcomeSimple = 
+                                                if_else(Outcome %in% c("Caution (simple or conditional)", "Nothing found - no further action", "A no further action disposal", "Offender cautioned"),
+                                                        true = "No Serious Crime Found", false = 
+                                                if_else(Outcome %in% c("Community resolution", "Penalty Notice for Disorder", "Offender given drugs possession warning",
+                                                                       "Khat or Cannabis warning", "Offender given drugs possession warning", "Local resolution", "Offender given penalty notice"),
+                                                                true = "Item Found but No Charges", false = 
+                                                          if_else(Outcome %in% c("Summons / charged by post", "Arrest", "Suspect arrested", "Suspect summonsed to court"), 
+                                                                  true = "Arrest/Charge", false = ""))))
+
+outcomeSummary <- stopSearch %>% filter(OutcomeSimple != "") %>% filter(OfficerDefinedEthnicity != "") %>% group_by(OutcomeSimple, OfficerDefinedEthnicity) %>%
+  summarise(number = n())
+
+outcomeSummary$TotalByEthnicity = rep(c(119928, 275567,  28617, 268676), times = 3)
+outcomeSummary$TotalByOutcome = rep(c(97993, 71006, 523789), each = 4)
+
+outcomeSummary <- outcomeSummary %>%
+  mutate(pctByEthnicity = (number/TotalByEthnicity) * 100, pctByOutcome = (number / TotalByOutcome) * 100)
+```
+
+```{r sec60SummaryData}
+sec60StopSearch <- filter(stopSearch, Legislation == "Criminal Justice and Public Order Act 1994 (section 60)")
+```
+
+```{r sec60Plots, fig.height = 3}
+plot1 <- sec60StopSearch %>% group_by(SelfDefinedEthnicitySimple, month = floor_date(dateDay, "month")) %>%
+  summarise(number = n()) %>%
+  ggplot(aes(x = month, y = number, color = SelfDefinedEthnicitySimple)) +
+  geom_point() + geom_line()
+
+plot2 <- sec60StopSearch %>% group_by(OfficerDefinedEthnicity, month = floor_date(dateDay, "month")) %>%
+  summarise(number = n()) %>%
+  ggplot(aes(x = month, y = number, color = OfficerDefinedEthnicity)) +
+  geom_point() + geom_line()
+
+plot1
+
+plot2
+```
+
+
+```{r groupSec60SearchesEthnicityDay}
+sec60StopSearch %>% group_by(SelfDefinedEthnicitySimple, dateDay) %>% 
+       summarise(number = n()) %>% 
+       filter(SelfDefinedEthnicitySimple %in% c("Black", "White"))
+```
+
+
+```{r sec60DispRatio}
+sec60Summary <- sec60StopSearch %>% filter(Force == "metropolitan") %>% filter(SelfDefinedEthnicitySimple != "") %>% group_by(SelfDefinedEthnicitySimple, year = floor_date(dateDay, "year")) %>% summarise(number = n())
+sec60Summary$Population <- rep(c(1629000, 1050000, 940000, 5247000), each = 4)
+sec60Summary <- sec60Summary %>% mutate(RatePerThousand = (number/Population)*1000)
+
+sec60Summary2 <- sec60StopSearch %>% filter(Force == "metropolitan") %>% filter(OfficerDefinedEthnicity != "") %>% group_by(OfficerDefinedEthnicity, year = floor_date(dateDay, "year")) %>% summarise(number = n())
+sec60Summary2$Population <- rep(c(1629000, 1050000, 940000, 5247000), each = 4)
+sec60Summary2 <- sec60Summary2 %>% mutate(RatePerThousand = (number/Population)*1000)
+
+blackWhiteSelfDispSec60 <- filter(sec60Summary, SelfDefinedEthnicitySimple == "Black")$RatePerThousand / filter(sec60Summary, SelfDefinedEthnicitySimple == "White")$RatePerThousand
+asianWhiteSelfDispSec60 <- filter(sec60Summary, SelfDefinedEthnicitySimple == "Asian")$RatePerThousand / filter(sec60Summary, SelfDefinedEthnicitySimple == "White")$RatePerThousand
+blackWhiteOffDispSec60 <- filter(sec60Summary2, OfficerDefinedEthnicity == "Black")$RatePerThousand / filter(sec60Summary2, OfficerDefinedEthnicity == "White")$RatePerThousand
+asianWhiteOffDispSec60 <- filter(sec60Summary2, OfficerDefinedEthnicity == "Asian")$RatePerThousand / filter(sec60Summary2, OfficerDefinedEthnicity == "White")$RatePerThousand
+```
+
+
+
+
